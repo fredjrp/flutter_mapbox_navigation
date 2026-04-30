@@ -1,0 +1,41 @@
+workflows:
+  mapbox-navigation-example:
+    name: Mapbox Navigation Example Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: 3.22.3
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'master'
+          include: true
+    scripts:
+      - name: Set up local.properties
+        script: |
+          # We need to set this in the example's android folder
+          echo "flutter.sdk=$FLUTTER_ROOT" > example/android/local.properties
+
+      - name: Get dependencies for Root and Example
+        script: |
+          # First, get dependencies for the plugin itself
+          flutter pub get
+          
+          # Then, go into the example folder and get dependencies there
+          cd example
+          flutter pub get
+
+      - name: Build Android APK
+        script: |
+          cd example
+          
+          # Cleaning is vital for older repos to prevent cache conflicts
+          flutter clean
+          
+          # Building the APK
+          # Adding --no-tree-shake-icons as old Mapbox versions often have icon font issues
+          flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation
+
+    artifacts:
+      - example/build/app/outputs/flutter-apk/*.apk
