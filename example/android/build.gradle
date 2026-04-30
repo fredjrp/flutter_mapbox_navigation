@@ -16,6 +16,19 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // Mapbox SDK Repository
+        maven {
+            url 'https://api.mapbox.com/downloads/v2/releases/maven'
+            authentication {
+                basic(BasicAuthentication)
+            }
+            credentials {
+                // Do not change the username "mapbox"
+                username = "mapbox"
+                // This looks for the token in your environment variables
+                password = System.getenv("MAPBOX_DOWNLOADS_TOKEN") ?: ""
+            }
+        }
     }
 }
 
