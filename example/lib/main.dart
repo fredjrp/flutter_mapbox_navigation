@@ -48,7 +48,7 @@ class DropshipApp extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
             ),
           ),
-          cardTheme: CardThemeData(
+          cardTheme: CardTheme(
             elevation: 3,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
