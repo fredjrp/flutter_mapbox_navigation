@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:onboarding_app/size_config.dart';
 import 'package:onboarding_app/onboarding_contents.dart';
+import 'your_navigation_file.dart'; // Import your navigation screen
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -43,6 +44,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  void _navigateToNavigation() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SampleNavigationApp(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     SizeConfig().init(context);
@@ -66,10 +76,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.all(40.0),
                     child: Column(
                       children: [
-                        Expanded( // Wrap the Image.asset with Expanded
+                        Expanded(
                           child: Image.asset(
                             contents[i].image,
-                            // Remove fixed height here, let it be flexible
                           ),
                         ),
                         SizedBox(
@@ -118,16 +127,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ? Padding(
                           padding: const EdgeInsets.all(30),
                           child: ElevatedButton(
-                            onPressed: () {
-                              
-            // Navigate to navigation app when START is pressed
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SampleNavigationApp(),
-              ),
-            );
-                            },
+                            onPressed: _navigateToNavigation, // Updated
                             child: const Text("START"),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
@@ -150,9 +150,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               TextButton(
-                                onPressed: () {
-                                  _controller.jumpToPage(2);
-                                },
+                                onPressed: _navigateToNavigation, // Updated - SKIP also navigates
                                 child: const Text(
                                   "SKIP",
                                   style: TextStyle(color: Colors.black),
