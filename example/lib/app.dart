@@ -215,13 +215,6 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    initialize();
-    _loadSamplePlaces();
-  }
-
   Future<void> initialize() async {
     if (!mounted) return;
 
