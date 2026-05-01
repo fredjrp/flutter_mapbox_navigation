@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mapbox_navigation/flutter_mapbox_navigation.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
-import 'package:http/http.dart' as http;
 
 class SampleNavigationApp extends StatefulWidget {
   const SampleNavigationApp({super.key});
@@ -63,25 +61,22 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   bool _inFreeDrive = false;
   late MapBoxOptions _navigationOption;
 
-  // New sliding panel variables
+  // Sliding panel variables
   PanelController _panelController = PanelController();
   double _panelHeightOpen = 0;
-  double _panelHeightClosed = 150.0; // Shows top 2 places when collapsed
-  List<Place> _nearbyPlaces = [];
-  List<Place> _searchResults = [];
+  double _panelHeightClosed = 150.0;
   bool _isSearching = false;
   TextEditingController _searchController = TextEditingController();
-  bool _isLoading = false;
-
-  // User's current location (will be updated from navigation controller)
-  double _currentLat = 37.77440680146262;
-  double _currentLng = -122.43539772352648;
+  
+  // Sample nearby places data
+  List<Place> _nearbyPlaces = [];
+  List<Place> _searchResults = [];
 
   @override
   void initState() {
     super.initState();
     initialize();
-    _fetchNearbyPlaces();
+    _loadSamplePlaces();
   }
 
   @override
@@ -89,6 +84,142 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     _controller?.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _loadSamplePlaces() {
+    // Sample data for testing the UI
+    _nearbyPlaces = [
+      Place(
+        id: '1',
+        name: 'Starbucks Coffee',
+        address: '123 Market St, San Francisco, CA',
+        latitude: 37.7749,
+        longitude: -122.4194,
+        imageUrl: null,
+        distance: 0.5,
+        duration: 3,
+        rating: 4.5,
+        category: 'Coffee Shop',
+      ),
+      Place(
+        id: '2',
+        name: 'Whole Foods Market',
+        address: '450 Main St, San Francisco, CA',
+        latitude: 37.7750,
+        longitude: -122.4180,
+        imageUrl: null,
+        distance: 0.8,
+        duration: 5,
+        rating: 4.2,
+        category: 'Grocery',
+      ),
+      Place(
+        id: '3',
+        name: 'Planet Fitness',
+        address: '789 Mission St, San Francisco, CA',
+        latitude: 37.7730,
+        longitude: -122.4200,
+        imageUrl: null,
+        distance: 1.2,
+        duration: 7,
+        rating: 4.0,
+        category: 'Gym',
+      ),
+      Place(
+        id: '4',
+        name: 'Pizza Hut',
+        address: '321 Howard St, San Francisco, CA',
+        latitude: 37.7760,
+        longitude: -122.4170,
+        imageUrl: null,
+        distance: 1.5,
+        duration: 8,
+        rating: 3.8,
+        category: 'Restaurant',
+      ),
+      Place(
+        id: '5',
+        name: 'Walgreens Pharmacy',
+        address: '567 4th St, San Francisco, CA',
+        latitude: 37.7770,
+        longitude: -122.4160,
+        imageUrl: null,
+        distance: 1.8,
+        duration: 10,
+        rating: 4.1,
+        category: 'Pharmacy',
+      ),
+    ];
+    _searchResults = [];
+  }
+
+  // Simulate search functionality
+  void _searchPlaces(String query) {
+    if (query.isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    
+    setState(() {
+      _searchResults = _nearbyPlaces
+          .where((place) => place.name.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
+  }
+
+  // Add place as waypoint
+  Future<void> _addAsWaypoint(Place place) async {
+    final waypoint = WayPoint(
+      name: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      isSilent: false,
+    );
+    
+    if (_routeBuilt || _isNavigating) {
+      await MapBoxNavigation.instance.addWayPoints(wayPoints: [waypoint]);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Added ${place.name} as waypoint'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please build a route first before adding waypoints'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+    
+    await _panelController.close();
+  }
+
+  // Show place details
+  void _showPlaceDetails(Place place) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PlaceDetailsSheet(
+        place: place, 
+        onAdd: () => _addAsWaypoint(place),
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    initialize();
+    _loadSamplePlaces();
   }
 
   Future<void> initialize() async {
@@ -111,122 +242,9 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     });
   }
 
-  // Fetch nearby places using MapBox API
-  Future<void> _fetchNearbyPlaces() async {
-    setState(() => _isLoading = true);
-    
-    // MapBox Places API endpoint for nearby search
-    // Using the current location (San Francisco area for demo)
-    String url = "https://api.mapbox.com/geocoding/v5/mapbox.places/"
-        "restaurant.json?proximity=$_currentLng,$_currentLat&limit=10&access_token=YOUR_MAPBOX_TOKEN";
-    
-    // Note: Replace YOUR_MAPBOX_TOKEN with your actual token
-    // Since you said token is already configured, use the same one as your navigation
-    
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        List<Place> places = [];
-        for (var feature in data['features']) {
-          places.add(Place.fromJson(feature));
-        }
-        setState(() {
-          _nearbyPlaces = places;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print("Error fetching places: $e");
-      setState(() => _isLoading = false);
-    }
-  }
-
-  // Search places using MapBox Autocomplete
-  Future<void> _searchPlaces(String query) async {
-    if (query.isEmpty) {
-      setState(() => _searchResults = []);
-      return;
-    }
-    
-    setState(() => _isLoading = true);
-    
-    String url = "https://api.mapbox.com/geocoding/v5/mapbox.places/"
-        "$query.json?proximity=$_currentLng,$_currentLat&limit=10&access_token=pk.eyJ1IjoiZnJlZGp5IiwiYSI6ImNtbmphZ2tiMDBnMjQycnFyNnh0cXF0cmYifQ.eubs9uIGOVmbyfXJakLo9g";
-    
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        List<Place> places = [];
-        for (var feature in data['features']) {
-          places.add(Place.fromJson(feature));
-        }
-        setState(() {
-          _searchResults = places;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print("Error searching: $e");
-      setState(() => _isLoading = false);
-    }
-  }
-
-  // Get driving distance and time between two points
-  Future<Map<String, dynamic>> _getDrivingDistance(double fromLat, double fromLng, double toLat, double toLng) async {
-    String url = "https://api.mapbox.com/directions/v5/mapbox/driving/"
-        "$fromLng,$fromLat;$toLng,$toLat?access_token=YOUR_MAPBOX_TOKEN";
-    
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final route = data['routes'][0];
-        final distance = route['distance'] / 1000; // in kilometers
-        final duration = route['duration'] / 60; // in minutes
-        return {'distance': distance, 'duration': duration};
-      }
-    } catch (e) {
-      print("Error getting distance: $e");
-    }
-    return {'distance': 0, 'duration': 0};
-  }
-
-  // Add place as waypoint
-  Future<void> _addAsWaypoint(Place place) async {
-    final waypoint = WayPoint(
-      name: place.name,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      isSilent: false,
-    );
-    
-    // Add to current route if navigation is active
-    if (_routeBuilt || _isNavigating) {
-      await MapBoxNavigation.instance.addWayPoints(wayPoints: [waypoint]);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added ${place.name} as waypoint')),
-      );
-    }
-    
-    // Close the panel
-    await _panelController.close();
-  }
-
-  // Show place details page
-  void _showPlaceDetails(Place place) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => PlaceDetailsSheet(place: place, onAdd: () => _addAsWaypoint(place)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    _panelHeightOpen = MediaQuery.of(context).size.height * 0.8;
+    _panelHeightOpen = MediaQuery.of(context).size.height * 0.75;
     
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -235,21 +253,55 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           title: const Text('Navigation App'),
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
+          elevation: 0,
         ),
         body: Stack(
           children: [
             // Map View
-            Container(
-              color: Colors.grey,
-              child: MapBoxNavigationView(
-                options: _navigationOption,
-                onRouteEvent: _onEmbeddedRouteEvent,
-                onCreated: (MapBoxNavigationViewController controller) async {
-                  _controller = controller;
-                  controller.initialize();
-                },
-              ),
+            MapBoxNavigationView(
+              options: _navigationOption,
+              onRouteEvent: _onEmbeddedRouteEvent,
+              onCreated: (MapBoxNavigationViewController controller) async {
+                _controller = controller;
+                controller.initialize();
+              },
             ),
+            
+            // Navigation instruction banner (floating on top of map)
+            if (_instruction != null)
+              Positioned(
+                top: 80,
+                left: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.navigation, color: Colors.white, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _instruction!,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             
             // Sliding Panel
             SlidingUpPanel(
@@ -262,30 +314,16 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                 topLeft: Radius.circular(24.0),
                 topRight: Radius.circular(24.0),
               ),
-              onPanelSlide: (double pos) => setState(() {}),
-              panel: _buildPanelContent(),
-              body: Container(), // Empty body since we're using Stack
-            ),
-            
-            // Navigation instructions overlay (small banner)
-            if (_instruction != null)
-              Positioned(
-                top: 80,
-                left: 20,
-                right: 20,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _instruction!,
-                    style: const TextStyle(color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 8,
+                  offset: Offset(0, -2),
                 ),
-              ),
+              ],
+              panel: _buildPanelContent(),
+              body: Container(),
+            ),
           ],
         ),
       ),
@@ -307,10 +345,10 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 40,
-            height: 5,
+            height: 4,
             decoration: BoxDecoration(
               color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
           
@@ -319,8 +357,9 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
             padding: const EdgeInsets.all(16),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: Colors.grey[50],
                 borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Colors.grey[200]!),
               ),
               child: TextField(
                 controller: _searchController,
@@ -331,10 +370,11 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                 },
                 decoration: InputDecoration(
                   hintText: 'Search for places...',
-                  prefixIcon: const Icon(Icons.search),
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear),
+                          icon: Icon(Icons.clear, color: Colors.grey[600]),
                           onPressed: () {
                             _searchController.clear();
                             setState(() {
@@ -345,19 +385,17 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                 ),
               ),
             ),
           ),
           
-          // Content (Nearby Places or Search Results)
+          // Content
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _isSearching
-                    ? _buildSearchResults()
-                    : _buildNearbyPlaces(),
+            child: _isSearching && _searchController.text.isNotEmpty
+                ? _buildSearchResults()
+                : _buildNearbyPlaces(),
           ),
         ],
       ),
@@ -366,8 +404,12 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
 
   Widget _buildNearbyPlaces() {
     if (_nearbyPlaces.isEmpty) {
-      return const Center(child: Text('No nearby places found'));
+      return const Center(child: Text('No places found'));
     }
+    
+    final displayPlaces = _panelController.isPanelOpen 
+        ? _nearbyPlaces 
+        : _nearbyPlaces.take(2).toList();
     
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -379,16 +421,13 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ),
-        // Show top 2 places in collapsed view, all when expanded
-        ...(_panelController.isPanelOpen
-            ? _nearbyPlaces.map((place) => _buildPlaceCard(place))
-            : _nearbyPlaces.take(2).map((place) => _buildPlaceCard(place))),
+        ...displayPlaces.map((place) => _buildPlaceCard(place)),
       ],
     );
   }
 
   Widget _buildSearchResults() {
-    if (_searchResults.isEmpty && _searchController.text.isNotEmpty) {
+    if (_searchResults.isEmpty) {
       return const Center(child: Text('No results found'));
     }
     
@@ -411,28 +450,19 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Image
+              // Placeholder Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: place.imageUrl != null
-                    ? Image.network(
-                        place.imageUrl!,
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 80,
-                          height: 80,
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.image, size: 40),
-                        ),
-                      )
-                    : Container(
-                        width: 80,
-                        height: 80,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.place, size: 40),
-                      ),
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.grey[200],
+                  child: Icon(
+                    _getCategoryIcon(place.category),
+                    size: 40,
+                    color: Colors.grey[600],
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               // Details
@@ -459,24 +489,38 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.star, size: 14, color: Colors.amber[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          place.rating.toString(),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 12),
+                        const Icon(Icons.category, size: 14, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          place.category,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         const Icon(Icons.directions_car, size: 14, color: Colors.grey),
                         const SizedBox(width: 4),
                         Text(
-                          place.distance != null 
-                              ? '${place.distance!.toStringAsFixed(1)} km'
-                              : 'Distance unknown',
+                          '${place.distance.toStringAsFixed(1)} km',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 12),
                         const Icon(Icons.access_time, size: 14, color: Colors.grey),
                         const SizedBox(width: 4),
                         Text(
-                          place.duration != null
-                              ? '${place.duration!.toStringAsFixed(0)} min'
-                              : 'ETA unknown',
+                          '${place.duration.toStringAsFixed(0)} min',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const Spacer(),
@@ -490,6 +534,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
                             ),
+                            elevation: 0,
                           ),
                           child: const Text('Add', style: TextStyle(fontSize: 12)),
                         ),
@@ -505,16 +550,26 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     );
   }
 
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'coffee shop':
+        return Icons.local_cafe;
+      case 'grocery':
+        return Icons.local_grocery_store;
+      case 'gym':
+        return Icons.fitness_center;
+      case 'restaurant':
+        return Icons.restaurant;
+      case 'pharmacy':
+        return Icons.local_pharmacy;
+      default:
+        return Icons.place;
+    }
+  }
+
   Future<void> _onEmbeddedRouteEvent(e) async {
     _distanceRemaining = await MapBoxNavigation.instance.getDistanceRemaining();
     _durationRemaining = await MapBoxNavigation.instance.getDurationRemaining();
-
-    // Update current location if available
-    final location = await MapBoxNavigation.instance.getCurrentLocation();
-    if (location != null) {
-      _currentLat = location.latitude;
-      _currentLng = location.longitude;
-    }
 
     switch (e.eventType) {
       case MapBoxEvent.progress_change:
@@ -569,8 +624,10 @@ class Place {
   final double latitude;
   final double longitude;
   final String? imageUrl;
-  double? distance;
-  double? duration;
+  final double distance;
+  final double duration;
+  final double rating;
+  final String category;
 
   Place({
     required this.id,
@@ -579,40 +636,23 @@ class Place {
     required this.latitude,
     required this.longitude,
     this.imageUrl,
-    this.distance,
-    this.duration,
+    required this.distance,
+    required this.duration,
+    required this.rating,
+    required this.category,
   });
-
-  factory Place.fromJson(Map<String, dynamic> json) {
-    final coordinates = json['geometry']['coordinates'];
-    return Place(
-      id: json['id'],
-      name: json['text'] ?? json['place_name'] ?? 'Unknown',
-      address: json['place_name'] ?? 'No address',
-      latitude: coordinates[1],
-      longitude: coordinates[0],
-      imageUrl: json['properties']?['image_url'], // Placeholder for images
-    );
-  }
 }
 
 // Place Details Bottom Sheet
-class PlaceDetailsSheet extends StatefulWidget {
+class PlaceDetailsSheet extends StatelessWidget {
   final Place place;
   final VoidCallback onAdd;
 
-  const PlaceDetailsSheet({required this.place, required this.onAdd, super.key});
-
-  @override
-  State<PlaceDetailsSheet> createState() => _PlaceDetailsSheetState();
-}
-
-class _PlaceDetailsSheetState extends State<PlaceDetailsSheet> {
-  List<String> demoImages = [
-    'https://via.placeholder.com/400x200?text=Image+1',
-    'https://via.placeholder.com/400x200?text=Image+2',
-    'https://via.placeholder.com/400x200?text=Image+3',
-  ];
+  const PlaceDetailsSheet({
+    super.key,
+    required this.place,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -628,33 +668,27 @@ class _PlaceDetailsSheetState extends State<PlaceDetailsSheet> {
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 40,
-            height: 5,
+            height: 4,
             decoration: BoxDecoration(
               color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // Image slideshow
-          SizedBox(
+          
+          // Hero image placeholder
+          Container(
             height: 200,
-            child: PageView.builder(
-              itemCount: demoImages.length,
-              itemBuilder: (context, index) {
-                return ClipRRect(
-                  borderRadius: const BorderRadius.all(Radius.circular(16)),
-                  child: Image.network(
-                    demoImages[index],
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.image, size: 50),
-                    ),
-                  ),
-                );
-              },
+            width: double.infinity,
+            color: Colors.grey[200],
+            child: Icon(
+              _getCategoryIcon(place.category),
+              size: 80,
+              color: Colors.grey[400],
             ),
           ),
+          
           const SizedBox(height: 16),
+          
           // Place details
           Padding(
             padding: const EdgeInsets.all(16),
@@ -662,37 +696,64 @@ class _PlaceDetailsSheetState extends State<PlaceDetailsSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.place.name,
+                  place.name,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.star, size: 16, color: Colors.amber[700]),
+                    const SizedBox(width: 4),
+                    Text(
+                      place.rating.toString(),
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 16),
+                    Icon(Icons.category, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(place.category),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     const Icon(Icons.location_on, size: 16, color: Colors.grey),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        widget.place.address,
-                        style: const TextStyle(color: Colors.grey),
+                        place.address,
+                        style: TextStyle(color: Colors.grey[600]),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.directions_car, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text('${place.distance.toStringAsFixed(1)} km away'),
+                    const SizedBox(width: 16),
+                    const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text('~${place.duration.toStringAsFixed(0)} min drive'),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          widget.onAdd();
+                          onAdd();
                           Navigator.pop(context);
                         },
-                        icon: const Icon(Icons.add),
+                        icon: const Icon(Icons.add_location),
                         label: const Text('Add to Route'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.black,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -708,5 +769,22 @@ class _PlaceDetailsSheetState extends State<PlaceDetailsSheet> {
         ],
       ),
     );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'coffee shop':
+        return Icons.local_cafe;
+      case 'grocery':
+        return Icons.local_grocery_store;
+      case 'gym':
+        return Icons.fitness_center;
+      case 'restaurant':
+        return Icons.restaurant;
+      case 'pharmacy':
+        return Icons.local_pharmacy;
+      default:
+        return Icons.place;
+    }
   }
 }
