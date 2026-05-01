@@ -29,10 +29,6 @@ workflows:
       - name: Build Android APK
         script: |
           cd example
-          
-          # Cleaning is vital for older repos to prevent cache conflicts
-          flutter clean
-          
           # Building the APK
           # Adding --no-tree-shake-icons as old Mapbox versions often have icon font issues
           flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation
