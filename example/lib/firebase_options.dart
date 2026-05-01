@@ -24,11 +24,14 @@ class DefaultFirebaseOptions {
 
   // TODO: Replace with your actual Firebase config from flutterfire configure
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+      apiKey: "AIzaSyAk9DOEc_hmyeAJEob8QBAyQkiZCp_CPuI",
+      authDomain: "uberzo.firebaseapp.com",
+      databaseURL: "https://uberzo-default-rtdb.firebaseio.com",
+      projectId: "uberzo",
+      storageBucket: "uberzo.firebasestorage.app",
+      messagingSenderId: "805708188196",
+      appId: "1:805708188196:web:4bbfbf0b2833ade319a6b1",
+      measurementId: "G-9F656XRL64"
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
