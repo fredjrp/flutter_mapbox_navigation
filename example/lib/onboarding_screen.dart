@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:onboarding_app/size_config.dart';
 import 'package:onboarding_app/onboarding_contents.dart';
-import 'your_navigation_file.dart'; // Import your navigation screen
+import 'app.dart'; // Import your navigation screen
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
