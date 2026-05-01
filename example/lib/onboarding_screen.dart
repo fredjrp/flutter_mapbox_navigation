@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:onboarding_app/size_config.dart';
-import 'package:onboarding_app/onboarding_contents.dart';
-import 'app.dart'; // Import your navigation screen
+import 'size_config.dart';
+import 'onboarding_contents.dart';
+import 'app.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -127,7 +127,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ? Padding(
                           padding: const EdgeInsets.all(30),
                           child: ElevatedButton(
-                            onPressed: _navigateToNavigation, // Updated
+                            onPressed: _navigateToNavigation,
                             child: const Text("START"),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
@@ -150,7 +150,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               TextButton(
-                                onPressed: _navigateToNavigation, // Updated - SKIP also navigates
+                                onPressed: _navigateToNavigation,
                                 child: const Text(
                                   "SKIP",
                                   style: TextStyle(color: Colors.black),
