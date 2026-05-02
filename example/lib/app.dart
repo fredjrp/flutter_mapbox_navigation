@@ -71,7 +71,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   @override
   void dispose() {
     _controller?.dispose();
-    _panelController.dispose();
+    // PanelController doesn't have a dispose method
     super.dispose();
   }
 
@@ -276,129 +276,167 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   }
 
   Widget _buildNavigationButtons() {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        // Full Screen Navigation Section
-        _buildSectionTitle("Full Screen Navigation"),
-        const SizedBox(width: 10),
-        ElevatedButton(
-          child: const Text("Start A to B"),
-          onPressed: () async {
-            var wayPoints = <WayPoint>[];
-            wayPoints.add(_home);
-            wayPoints.add(_store);
-            var opt = MapBoxOptions.from(_navigationOption);
-            opt.simulateRoute = true;
-            opt.voiceInstructionsEnabled = true;
-            opt.bannerInstructionsEnabled = true;
-            opt.units = VoiceUnits.metric;
-            opt.language = "de-DE";
-            await MapBoxNavigation.instance
-                .startNavigation(wayPoints: wayPoints, options: opt);
-          },
-        ),
-        ElevatedButton(
-          child: const Text("Start Multi Stop"),
-          onPressed: () async {
-            _isMultipleStop = true;
-            var wayPoints = <WayPoint>[];
-            wayPoints.add(_origin);
-            wayPoints.add(_stop1);
-            wayPoints.add(_stop2);
-            wayPoints.add(_stop3);
-            wayPoints.add(_destination);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          // Full Screen Navigation Section
+          _buildSectionTitle("Full Screen"),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("A to B"),
+            onPressed: () async {
+              var wayPoints = <WayPoint>[];
+              wayPoints.add(_home);
+              wayPoints.add(_store);
+              var opt = MapBoxOptions.from(_navigationOption);
+              opt.simulateRoute = true;
+              opt.voiceInstructionsEnabled = true;
+              opt.bannerInstructionsEnabled = true;
+              opt.units = VoiceUnits.metric;
+              opt.language = "de-DE";
+              await MapBoxNavigation.instance
+                  .startNavigation(wayPoints: wayPoints, options: opt);
+            },
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Multi Stop"),
+            onPressed: () async {
+              _isMultipleStop = true;
+              var wayPoints = <WayPoint>[];
+              wayPoints.add(_origin);
+              wayPoints.add(_stop1);
+              wayPoints.add(_stop2);
+              wayPoints.add(_stop3);
+              wayPoints.add(_destination);
 
-            MapBoxNavigation.instance.startNavigation(
-                wayPoints: wayPoints,
-                options: MapBoxOptions(
-                    mode: MapBoxNavigationMode.driving,
-                    simulateRoute: true,
-                    language: "en",
-                    allowsUTurnAtWayPoints: true,
-                    units: VoiceUnits.metric));
-            await Future.delayed(const Duration(seconds: 10));
-            var stop = WayPoint(
-                name: "Gas Station",
-                latitude: 38.911176544398,
-                longitude: -77.04014366543564,
-                isSilent: false);
-            MapBoxNavigation.instance
-                .addWayPoints(wayPoints: [stop]);
-          },
-        ),
-        ElevatedButton(
-          child: const Text("Free Drive"),
-          onPressed: () async {
-            await MapBoxNavigation.instance.startFreeDrive();
-          },
-        ),
-        
-        _buildSectionTitle("Embedded Navigation"),
-        const SizedBox(width: 10),
-        ElevatedButton(
-          onPressed: _isNavigating
-              ? null
-              : () {
-                  if (_routeBuilt) {
-                    _controller?.clearRoute();
-                    setState(() {
-                      _routeBuilt = false;
-                    });
-                  } else {
-                    var wayPoints = <WayPoint>[];
-                    wayPoints.add(_home);
-                    wayPoints.add(_store);
-                    _isMultipleStop = wayPoints.length > 2;
-                    _controller?.buildRoute(
-                        wayPoints: wayPoints,
-                        options: _navigationOption);
+              MapBoxNavigation.instance.startNavigation(
+                  wayPoints: wayPoints,
+                  options: MapBoxOptions(
+                      mode: MapBoxNavigationMode.driving,
+                      simulateRoute: true,
+                      language: "en",
+                      allowsUTurnAtWayPoints: true,
+                      units: VoiceUnits.metric));
+              await Future.delayed(const Duration(seconds: 10));
+              var stop = WayPoint(
+                  name: "Gas Station",
+                  latitude: 38.911176544398,
+                  longitude: -77.04014366543564,
+                  isSilent: false);
+              MapBoxNavigation.instance
+                  .addWayPoints(wayPoints: [stop]);
+            },
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Free Drive"),
+            onPressed: () async {
+              await MapBoxNavigation.instance.startFreeDrive();
+            },
+          ),
+          
+          const SizedBox(width: 16),
+          _buildSectionTitle("Embedded"),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _routeBuilt && !_isNavigating ? Colors.orange : Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: _isNavigating
+                ? null
+                : () {
+                    if (_routeBuilt) {
+                      _controller?.clearRoute();
+                      setState(() {
+                        _routeBuilt = false;
+                      });
+                    } else {
+                      var wayPoints = <WayPoint>[];
+                      wayPoints.add(_home);
+                      wayPoints.add(_store);
+                      _isMultipleStop = wayPoints.length > 2;
+                      _controller?.buildRoute(
+                          wayPoints: wayPoints,
+                          options: _navigationOption);
+                    }
+                  },
+            child: Text(_routeBuilt && !_isNavigating
+                ? "Clear Route"
+                : "Build Route"),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: _routeBuilt && !_isNavigating
+                ? () {
+                    _controller?.startNavigation();
                   }
-                },
-          child: Text(_routeBuilt && !_isNavigating
-              ? "Clear Route"
-              : "Build Route"),
-        ),
-        ElevatedButton(
-          onPressed: _routeBuilt && !_isNavigating
-              ? () {
-                  _controller?.startNavigation();
-                }
-              : null,
-          child: const Text('Start Navigation'),
-        ),
-        ElevatedButton(
-          onPressed: _isNavigating
-              ? () {
-                  _controller?.finishNavigation();
-                }
-              : null,
-          child: const Text('Cancel Navigation'),
-        ),
-        ElevatedButton(
-          onPressed: _inFreeDrive
-              ? null
-              : () async {
-                  _inFreeDrive =
-                      await _controller?.startFreeDrive() ?? false;
-                  setState(() {});
-                },
-          child: const Text("Free Drive Embedded"),
-        ),
-      ],
+                : null,
+            child: const Text('Start'),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: _isNavigating
+                ? () {
+                    _controller?.finishNavigation();
+                  }
+                : null,
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: _inFreeDrive
+                ? null
+                : () async {
+                    _inFreeDrive =
+                        await _controller?.startFreeDrive() ?? false;
+                    setState(() {});
+                  },
+            child: const Text("Free Drive"),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[300],
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Text(
         title,
         style: const TextStyle(
           fontWeight: FontWeight.bold,
-          fontSize: 16,
+          fontSize: 14,
         ),
       ),
     );
