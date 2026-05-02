@@ -1,9 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mapbox_navigation/flutter_mapbox_navigation.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
+import 'package:http/http.dart' as http;
+
+const String MAPBOX_ACCESS_TOKEN = String.fromEnvironment(
+  'MAPBOX_ACCESS_TOKEN',
+  defaultValue: 'pk.eyJ1IjoiZnJlZGp5IiwiYSI6ImNtbmphZ2tiMDBnMjQycnFyNnh0cXF0cmYifQ.eubs9uIGOVmbyfXJakLo9g'
+);
 
 class SampleNavigationApp extends StatefulWidget {
   const SampleNavigationApp({super.key});
@@ -15,6 +22,13 @@ class SampleNavigationApp extends StatefulWidget {
 class _SampleNavigationAppState extends State<SampleNavigationApp> {
   String? _platformVersion;
   String? _instruction;
+  
+  WayPoint _destination = WayPoint(
+      name: "Way Point 5",
+      latitude: 38.90894949285854,
+      longitude: -77.03651905059814,
+      isSilent: false);
+
   final _origin = WayPoint(
       name: "Way Point 1",
       latitude: 38.9111117447887,
@@ -35,18 +49,12 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
       latitude: 38.909650771013034,
       longitude: -77.03850388526917,
       isSilent: true);
-  final _destination = WayPoint(
-      name: "Way Point 5",
-      latitude: 38.90894949285854,
-      longitude: -77.03651905059814,
-      isSilent: false);
-
+      
   final _home = WayPoint(
       name: "Home",
       latitude: 37.77440680146262,
       longitude: -122.43539772352648,
       isSilent: false);
-
   final _store = WayPoint(
       name: "Store",
       latitude: 37.76556957793795,
@@ -60,6 +68,14 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   bool _isNavigating = false;
   bool _inFreeDrive = false;
   late MapBoxOptions _navigationOption;
+  
+  TextEditingController? _searchController;
+  
+  // Floating Card Data
+  String? _selectedLocationName;
+  String? _selectedLocationAddress;
+  String? _selectedLocationImageUrl;
+  bool _isLocationCardVisible = false;
 
   @override
   void initState() {
@@ -73,7 +89,6 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     super.dispose();
   }
 
-  // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initialize() async {
     if (!mounted) return;
 
@@ -96,6 +111,71 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     }
   }
 
+  // ==== MAPBOX API INTEGRATIONS ====
+
+  Future<List<Map<String, dynamic>>> _fetchSuggestions(String query) async {
+    if (query.isEmpty) return [];
+    final url = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/$query.json?access_token=$MAPBOX_ACCESS_TOKEN&autocomplete=true&limit=5');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final features = data['features'] as List;
+        return features.map((f) => {
+          'place_name': f['place_name'],
+          'text': f['text'],
+          'center': f['center'], // [longitude, latitude]
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint("Error fetching suggestions: $e");
+    }
+    return [];
+  }
+
+  Future<void> _reverseGeocode(double lat, double lng) async {
+    final url = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json?access_token=$MAPBOX_ACCESS_TOKEN&limit=1');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final features = data['features'] as List;
+        if (features.isNotEmpty) {
+          final feature = features[0];
+          _updateLocationDetails(
+            name: feature['text'] ?? "Pinned Location",
+            address: feature['place_name'] ?? "",
+            lat: lat,
+            lng: lng,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error reverse geocoding: $e");
+    }
+  }
+
+  void _updateLocationDetails({required String name, required String address, required double lat, required double lng}) {
+    setState(() {
+      _selectedLocationName = name;
+      _selectedLocationAddress = address;
+      _destination = WayPoint(name: name, latitude: lat, longitude: lng, isSilent: false);
+      
+      if (_searchController != null) {
+        _searchController!.text = name;
+      }
+      
+      // Generate static map image URL
+      _selectedLocationImageUrl = 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-marker+285A98($lng,$lat)/$lng,$lat,14,0/400x400?access_token=$MAPBOX_ACCESS_TOKEN';
+      _isLocationCardVisible = true;
+    });
+    
+    // Auto-build route to new location
+    _buildRoute(clearFirst: true);
+  }
+
+  // ==== UI BUILDING ====
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -112,7 +192,12 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           ),
         ],
         panelBuilder: (ScrollController sc) => _buildPanel(sc),
-        body: _buildMap(),
+        body: Stack(
+          children: [
+            _buildMap(),
+            _buildLocationCard(),
+          ],
+        ),
       ),
     );
   }
@@ -125,6 +210,95 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
         _controller = controller;
         controller.initialize();
       },
+    );
+  }
+
+  Widget _buildLocationCard() {
+    if (!_isLocationCardVisible) return const SizedBox.shrink();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Card(
+            elevation: 8,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Left: Mapbox Image
+                  ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+                    child: _selectedLocationImageUrl != null 
+                      ? Image.network(
+                          _selectedLocationImageUrl!,
+                          width: 100,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            width: 100,
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                          ),
+                        )
+                      : Container(width: 100, color: Colors.grey[200]),
+                  ),
+                  // Right: Description
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _selectedLocationName ?? "Unknown Location",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => setState(() => _isLocationCardVisible = false),
+                                child: const Icon(Icons.close, size: 20, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _selectedLocationAddress ?? "",
+                            style: const TextStyle(color: Colors.black54, fontSize: 12),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.bottomRight,
+                            child: FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 36),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                              onPressed: () {
+                                _startEmbeddedNavigation();
+                              },
+                              child: const Text("Navigate Here"),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -145,34 +319,8 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           ),
         ),
         const SizedBox(height: 16.0),
-        // Search Bar showing destination data
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(16.0),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            child: Row(
-              children: [
-                const Icon(Icons.search, color: Colors.grey),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _destination.name ?? "Where to?",
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        // Search Bar showing destination data with Autocomplete
+        _buildSearchBar(),
         const SizedBox(height: 16.0),
         // Scrollable content inside the panel
         Expanded(
@@ -227,7 +375,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                   runSpacing: 10,
                   children: [
                     FilledButton.tonal(
-                      onPressed: _isNavigating ? null : _buildRoute,
+                      onPressed: _isNavigating ? null : () => _buildRoute(clearFirst: false),
                       child: Text(_routeBuilt && !_isNavigating
                           ? "Clear Route"
                           : "Build Route"),
@@ -251,7 +399,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                 const SizedBox(height: 20),
                 const Center(
                   child: Text(
-                    "Long-Press Map to Set Destination",
+                    "Tap Map to Set Destination",
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey, fontSize: 12),
                   ),
@@ -270,6 +418,68 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(16.0),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+        child: Row(
+          children: [
+            const Icon(Icons.search, color: Colors.grey),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Autocomplete<Map<String, dynamic>>(
+                optionsBuilder: (TextEditingValue textEditingValue) async {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<Map<String, dynamic>>.empty();
+                  }
+                  return await _fetchSuggestions(textEditingValue.text);
+                },
+                displayStringForOption: (Map<String, dynamic> option) => option['text'] as String,
+                onSelected: (Map<String, dynamic> selection) {
+                  final center = selection['center'] as List;
+                  _updateLocationDetails(
+                    name: selection['text'],
+                    address: selection['place_name'],
+                    lng: center[0],
+                    lat: center[1],
+                  );
+                },
+                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                  _searchController = controller;
+                  // Set initial text if empty
+                  if (controller.text.isEmpty && _destination.name != null) {
+                    controller.text = _destination.name!;
+                  }
+                  return TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      hintText: "Where to?",
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 12.0),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -328,7 +538,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   Future<void> _startAtoB() async {
     var wayPoints = <WayPoint>[];
     wayPoints.add(_home);
-    wayPoints.add(_store);
+    wayPoints.add(_destination);
     var opt = MapBoxOptions.from(_navigationOption);
     opt.simulateRoute = true;
     opt.voiceInstructionsEnabled = true;
@@ -371,13 +581,21 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     await MapBoxNavigation.instance.startFreeDrive();
   }
 
-  void _buildRoute() {
-    if (_routeBuilt) {
+  void _buildRoute({bool clearFirst = false}) {
+    if (clearFirst) {
       _controller?.clearRoute();
+      _routeBuilt = false;
+    }
+    
+    if (_routeBuilt && !clearFirst) {
+      _controller?.clearRoute();
+      setState(() {
+        _routeBuilt = false;
+      });
     } else {
       var wayPoints = <WayPoint>[];
       wayPoints.add(_home);
-      wayPoints.add(_store);
+      wayPoints.add(_destination);
       _isMultipleStop = wayPoints.length > 2;
       _controller?.buildRoute(
           wayPoints: wayPoints, options: _navigationOption);
@@ -436,6 +654,14 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           _routeBuilt = false;
           _isNavigating = false;
         });
+        break;
+      case MapBoxEvent.on_map_tap:
+        if (e.data is WayPoint) {
+          final wp = e.data as WayPoint;
+          if (wp.latitude != null && wp.longitude != null) {
+            _reverseGeocode(wp.latitude!, wp.longitude!);
+          }
+        }
         break;
       default:
         break;
