@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mapbox_navigation/flutter_mapbox_navigation.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:http/http.dart' as http;
+import 'location_product_page.dart';
 
 const String MAPBOX_ACCESS_TOKEN = String.fromEnvironment(
   'MAPBOX_ACCESS_TOKEN',
@@ -76,6 +77,9 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   String? _selectedLocationAddress;
   String? _selectedLocationImageUrl;
   bool _isLocationCardVisible = false;
+
+  // Route Cart
+  List<WayPoint> _routeCart = [];
 
   @override
   void initState() {
@@ -217,82 +221,140 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     if (!_isLocationCardVisible) return const SizedBox.shrink();
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.only(bottom: 140.0, left: 16.0, right: 16.0),
         child: Align(
-          alignment: Alignment.topCenter,
+          alignment: Alignment.bottomCenter,
           child: Card(
             elevation: 8,
+            clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Left: Mapbox Image
-                  ClipRRect(
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-                    child: _selectedLocationImageUrl != null 
-                      ? Image.network(
-                          _selectedLocationImageUrl!,
-                          width: 100,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            width: 100,
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.image_not_supported, color: Colors.grey),
-                          ),
-                        )
-                      : Container(width: 100, color: Colors.grey[200]),
-                  ),
-                  // Right: Description
+                  // Main Proceed Area (Left)
                   Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                    flex: 3,
+                    child: InkWell(
+                      onTap: () async {
+                        final addedPoint = await Navigator.of(context).push<WayPoint>(
+                          MaterialPageRoute(
+                            builder: (_) => LocationProductPage(
+                              location: _destination,
+                              address: _selectedLocationAddress,
+                              imageUrl: _selectedLocationImageUrl,
+                            ),
+                          ),
+                        );
+                        if (addedPoint != null) {
+                          setState(() {
+                            _routeCart.add(addedPoint);
+                            // Ensure card stays visible to show the checkout button
+                          });
+                        }
+                      },
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _selectedLocationName ?? "Unknown Location",
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () => setState(() => _isLocationCardVisible = false),
-                                child: const Icon(Icons.close, size: 20, color: Colors.grey),
-                              ),
-                            ],
+                          // Left: Mapbox Image
+                          ClipRRect(
+                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+                            child: _selectedLocationImageUrl != null 
+                              ? Image.network(
+                                  _selectedLocationImageUrl!,
+                                  width: 100,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    width: 100,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                                  ),
+                                )
+                              : Container(width: 100, color: Colors.grey[200]),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _selectedLocationAddress ?? "",
-                            style: const TextStyle(color: Colors.black54, fontSize: 12),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.bottomRight,
-                            child: FilledButton.tonal(
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size(0, 36),
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                          // Right: Description
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _selectedLocationName ?? "Unknown Location",
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: IconButton(
+                                          padding: EdgeInsets.zero,
+                                          iconSize: 20,
+                                          icon: const Icon(Icons.close, color: Colors.grey),
+                                          onPressed: () => setState(() => _isLocationCardVisible = false),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _selectedLocationAddress ?? "",
+                                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
-                              onPressed: () {
-                                _startEmbeddedNavigation();
-                              },
-                              child: const Text("Navigate Here"),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
+                  
+                  // Checkout Area (Right)
+                  if (_routeCart.isNotEmpty)
+                    Container(
+                      width: 1,
+                      color: Colors.grey[300],
+                    ),
+                  if (_routeCart.isNotEmpty)
+                    Expanded(
+                      flex: 1,
+                      child: Material(
+                        color: Colors.black87,
+                        child: InkWell(
+                          onTap: _startCartNavigation,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.route, color: Colors.white),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Checkout\n(${_routeCart.length})",
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -533,6 +595,26 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
         ],
       ),
     );
+  }
+
+  Future<void> _startCartNavigation() async {
+    var wayPoints = <WayPoint>[];
+    wayPoints.add(_home);
+    wayPoints.addAll(_routeCart);
+
+    var opt = MapBoxOptions.from(_navigationOption);
+    opt.simulateRoute = true;
+    opt.voiceInstructionsEnabled = true;
+    opt.bannerInstructionsEnabled = true;
+    opt.units = VoiceUnits.metric;
+    opt.language = "en";
+    
+    await MapBoxNavigation.instance.startNavigation(wayPoints: wayPoints, options: opt);
+    
+    setState(() {
+      _routeCart.clear();
+      _isLocationCardVisible = false;
+    });
   }
 
   Future<void> _startAtoB() async {
