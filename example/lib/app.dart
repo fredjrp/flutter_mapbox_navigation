@@ -587,20 +587,39 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     
     _isMultipleStop = wayPoints.length > 2;
     
-    // Use Embedded Navigation Controller
-    _controller?.buildRoute(wayPoints: wayPoints, options: _navigationOption);
-    
-    _autoStartNavigation = true; // Auto-start once built
-    
     // Minimize panel to let user see the navigation fully
     if (_panelController.isAttached) {
       _panelController.close();
     }
     
-    setState(() {
-      _routeCart.clear();
-      _isLocationCardVisible = false;
-    });
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Building Route..."), duration: Duration(seconds: 1)),
+    );
+
+    try {
+      // Wait for the route to build
+      final success = await _controller?.buildRoute(wayPoints: wayPoints, options: _navigationOption);
+      
+      if (success == true) {
+        // Explicitly start embedded navigation after successful build
+        await _controller?.startNavigation(options: _navigationOption);
+        
+        setState(() {
+          _routeCart.clear();
+          _isLocationCardVisible = false;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to build route. Make sure locations are reachable by car.")),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error starting navigation: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
   }
 
   void _buildRoute({bool clearFirst = false}) {
@@ -658,10 +677,6 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
         setState(() {
           _routeBuilt = true;
         });
-        if (_autoStartNavigation) {
-          _autoStartNavigation = false;
-          _startEmbeddedNavigation();
-        }
         break;
       case MapBoxEvent.route_build_failed:
         setState(() {
