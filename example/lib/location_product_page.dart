@@ -223,7 +223,11 @@ class _LocationProductPageState extends State<LocationProductPage> {
                         child: InkWell(
                           onTap: _isAddedToCart ? () {
                             // Return the customized waypoint back to main screen
-                            Navigator.of(context).pop(widget.location);
+                            Navigator.of(context).pop({
+                              'waypoint': widget.location,
+                              'priority': _selectedPriorityIndex,
+                              'quantity': _quantity,
+                            });
                           } : null,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
