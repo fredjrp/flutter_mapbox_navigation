@@ -7,6 +7,7 @@ import 'package:flutter_mapbox_navigation/flutter_mapbox_navigation.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:http/http.dart' as http;
 import 'location_product_page.dart';
+import 'cart_list_page.dart';
 
 const String MAPBOX_ACCESS_TOKEN = String.fromEnvironment(
   'MAPBOX_ACCESS_TOKEN',
@@ -211,6 +212,24 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     );
   }
 
+  Future<void> _openCartList() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => CartListPage(initialCart: _routeCart),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _routeCart = List<Map<String, dynamic>>.from(result['cart']);
+      });
+
+      if (result['action'] == 'checkout') {
+        _startCartNavigation();
+      }
+    }
+  }
+
   Widget _buildLocationCard() {
     if (!_isLocationCardVisible) return const SizedBox.shrink();
     return SafeArea(
@@ -326,26 +345,43 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                       flex: 1,
                       child: Material(
                         color: Colors.black87,
-                        child: InkWell(
-                          onTap: _startCartNavigation,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.route, color: Colors.white),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "Checkout\n(${_routeCart.length})",
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: _openCartList,
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.shopping_cart, color: Colors.white, size: 18),
+                                      const SizedBox(height: 2),
+                                      Text("Cart (${_routeCart.length})",
+                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ],
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
+                            Container(height: 1, color: Colors.white24),
+                            Expanded(
+                              child: InkWell(
+                                onTap: _startCartNavigation,
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Icon(Icons.navigation, color: Colors.white, size: 18),
+                                      SizedBox(height: 2),
+                                      Text("Checkout",
+                                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
