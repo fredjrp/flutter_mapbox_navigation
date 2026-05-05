@@ -523,6 +523,15 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   }
 
   Widget _buildHUD() {
+    String etaString = "---";
+    if (_durationRemaining != null && _durationRemaining! > 0) {
+      final eta = DateTime.now().add(Duration(seconds: _durationRemaining!.toInt()));
+      int hour = eta.hour > 12 ? eta.hour - 12 : (eta.hour == 0 ? 12 : eta.hour);
+      String ampm = eta.hour >= 12 ? "PM" : "AM";
+      String minute = eta.minute.toString().padLeft(2, '0');
+      etaString = "$hour:$minute $ampm";
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -533,7 +542,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
       child: Column(
         children: [
           Text(
-            _instruction ?? "Banner Instruction Here",
+            _instruction ?? "Calculating Route...",
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             textAlign: TextAlign.center,
           ),
@@ -541,6 +550,17 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              Column(
+                children: [
+                  const Text("ETA",
+                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                  Text(
+                    etaString,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ],
+              ),
               Column(
                 children: [
                   const Text("Duration",
@@ -560,7 +580,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                       style: TextStyle(color: Colors.black54, fontSize: 12)),
                   Text(
                     _distanceRemaining != null
-                        ? "${(_distanceRemaining! * 0.000621371).toStringAsFixed(1)} mi"
+                        ? "${(_distanceRemaining! / 1000).toStringAsFixed(1)} km"
                         : "---",
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 18),
@@ -598,12 +618,22 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     );
 
     try {
+      // Create multi-stop specific options
+      var opt = MapBoxOptions.from(_navigationOption);
+      opt.mode = MapBoxNavigationMode.driving;
+      opt.allowsUTurnAtWayPoints = true;
+      opt.simulateRoute = true;
+      opt.voiceInstructionsEnabled = true;
+      opt.bannerInstructionsEnabled = true;
+      opt.units = VoiceUnits.metric;
+      opt.language = "en";
+
       // Wait for the route to build
-      final success = await _controller?.buildRoute(wayPoints: wayPoints, options: _navigationOption);
+      final success = await _controller?.buildRoute(wayPoints: wayPoints, options: opt);
       
       if (success == true) {
         // Explicitly start embedded navigation after successful build
-        await _controller?.startNavigation(options: _navigationOption);
+        await _controller?.startNavigation(options: opt);
         
         setState(() {
           _routeCart.clear();
@@ -662,8 +692,17 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   }
 
   Future<void> _onEmbeddedRouteEvent(e) async {
-    _distanceRemaining = await MapBoxNavigation.instance.getDistanceRemaining();
-    _durationRemaining = await MapBoxNavigation.instance.getDurationRemaining();
+    try {
+      if (_controller != null) {
+        _distanceRemaining = await _controller!.distanceRemaining;
+        _durationRemaining = await _controller!.durationRemaining;
+      } else {
+        _distanceRemaining = await MapBoxNavigation.instance.getDistanceRemaining();
+        _durationRemaining = await MapBoxNavigation.instance.getDurationRemaining();
+      }
+    } catch (err) {
+      debugPrint("Error fetching nav stats: $err");
+    }
 
     switch (e.eventType) {
       case MapBoxEvent.progress_change:
