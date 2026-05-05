@@ -70,7 +70,8 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   bool _inFreeDrive = false;
   late MapBoxOptions _navigationOption;
   
-  TextEditingController? _searchController;
+  TextEditingController _searchController = TextEditingController();
+  final PanelController _panelController = PanelController();
   
   // Floating Card Data
   String? _selectedLocationName;
@@ -78,17 +79,25 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   String? _selectedLocationImageUrl;
   bool _isLocationCardVisible = false;
 
-  // Route Cart
-  List<WayPoint> _routeCart = [];
+  // Embedded Search Suggestions
+  List<Map<String, dynamic>> _suggestions = [];
+
+  // Route Cart (now holds maps with waypoint and priority)
+  List<Map<String, dynamic>> _routeCart = [];
+  bool _autoStartNavigation = false;
 
   @override
   void initState() {
     super.initState();
+    if (_destination.name != null) {
+      _searchController.text = _destination.name!;
+    }
     initialize();
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
     _controller?.dispose();
     super.dispose();
   }
@@ -117,24 +126,34 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
 
   // ==== MAPBOX API INTEGRATIONS ====
 
-  Future<List<Map<String, dynamic>>> _fetchSuggestions(String query) async {
-    if (query.isEmpty) return [];
-    final url = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/$query.json?access_token=$MAPBOX_ACCESS_TOKEN&autocomplete=true&limit=5');
+  Future<void> _fetchSuggestions(String query) async {
+    if (query.isEmpty) {
+      setState(() => _suggestions = []);
+      return;
+    }
+    
+    // Expand panel slightly so user can see suggestions
+    if (_panelController.isAttached && _panelController.panelPosition < 0.5) {
+      _panelController.animatePanelToPosition(0.6);
+    }
+
+    final url = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/$query.json?access_token=$MAPBOX_ACCESS_TOKEN&autocomplete=true&limit=3');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final features = data['features'] as List;
-        return features.map((f) => {
-          'place_name': f['place_name'],
-          'text': f['text'],
-          'center': f['center'], // [longitude, latitude]
-        }).toList();
+        setState(() {
+          _suggestions = features.map((f) => {
+            'place_name': f['place_name'],
+            'text': f['text'],
+            'center': f['center'], // [longitude, latitude]
+          }).toList();
+        });
       }
     } catch (e) {
       debugPrint("Error fetching suggestions: $e");
     }
-    return [];
   }
 
   Future<void> _reverseGeocode(double lat, double lng) async {
@@ -165,8 +184,12 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
       _selectedLocationAddress = address;
       _destination = WayPoint(name: name, latitude: lat, longitude: lng, isSilent: false);
       
-      if (_searchController != null) {
-        _searchController!.text = name;
+      _searchController.text = name;
+      _suggestions.clear();
+      
+      // Minimize panel to interact with card
+      if (_panelController.isAttached) {
+        _panelController.close();
       }
       
       // Generate static map image URL
@@ -174,7 +197,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
       _isLocationCardVisible = true;
     });
     
-    // Auto-build route to new location
+    // Auto-build route to new location (for visual preview)
     _buildRoute(clearFirst: true);
   }
 
@@ -184,6 +207,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SlidingUpPanel(
+        controller: _panelController,
         minHeight: 120.0,
         maxHeight: MediaQuery.of(context).size.height * 0.7,
         parallaxEnabled: true,
@@ -237,7 +261,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                     flex: 3,
                     child: InkWell(
                       onTap: () async {
-                        final addedPoint = await Navigator.of(context).push<WayPoint>(
+                        final addedPointMap = await Navigator.of(context).push<Map<String, dynamic>>(
                           MaterialPageRoute(
                             builder: (_) => LocationProductPage(
                               location: _destination,
@@ -246,10 +270,10 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                             ),
                           ),
                         );
-                        if (addedPoint != null) {
+                        if (addedPointMap != null) {
                           setState(() {
-                            _routeCart.add(addedPoint);
-                            // Ensure card stays visible to show the checkout button
+                            _routeCart.add(addedPointMap);
+                            // Keep card visible to show checkout button
                           });
                         }
                       },
@@ -381,9 +405,39 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           ),
         ),
         const SizedBox(height: 16.0),
-        // Search Bar showing destination data with Autocomplete
+        // Embedded Search Bar
         _buildSearchBar(),
-        const SizedBox(height: 16.0),
+        
+        // Embedded Suggestions List
+        if (_suggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12.0),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              children: _suggestions.map((suggestion) {
+                return ListTile(
+                  leading: const Icon(Icons.location_on, color: Colors.blue),
+                  title: Text(suggestion['text'] ?? "", style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(suggestion['place_name'] ?? "", maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () {
+                    final center = suggestion['center'] as List;
+                    _updateLocationDetails(
+                      name: suggestion['text'],
+                      address: suggestion['place_name'],
+                      lng: center[0],
+                      lat: center[1],
+                    );
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+          
+        const SizedBox(height: 8.0),
         // Scrollable content inside the panel
         Expanded(
           child: SingleChildScrollView(
@@ -498,47 +552,32 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
             const Icon(Icons.search, color: Colors.grey),
             const SizedBox(width: 10),
             Expanded(
-              child: Autocomplete<Map<String, dynamic>>(
-                optionsBuilder: (TextEditingValue textEditingValue) async {
-                  if (textEditingValue.text.isEmpty) {
-                    return const Iterable<Map<String, dynamic>>.empty();
-                  }
-                  return await _fetchSuggestions(textEditingValue.text);
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) {
+                  _fetchSuggestions(val);
                 },
-                displayStringForOption: (Map<String, dynamic> option) => option['text'] as String,
-                onSelected: (Map<String, dynamic> selection) {
-                  final center = selection['center'] as List;
-                  _updateLocationDetails(
-                    name: selection['text'],
-                    address: selection['place_name'],
-                    lng: center[0],
-                    lat: center[1],
-                  );
-                },
-                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                  _searchController = controller;
-                  // Set initial text if empty
-                  if (controller.text.isEmpty && _destination.name != null) {
-                    controller.text = _destination.name!;
-                  }
-                  return TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    decoration: const InputDecoration(
-                      hintText: "Where to?",
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 12.0),
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  );
-                },
+                decoration: const InputDecoration(
+                  hintText: "Where to?",
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 12.0),
+                ),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
+            if (_searchController.text.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.clear, color: Colors.grey, size: 20),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _suggestions.clear());
+                },
+              ),
           ],
         ),
       ),
@@ -598,18 +637,27 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   }
 
   Future<void> _startCartNavigation() async {
-    var wayPoints = <WayPoint>[];
-    wayPoints.add(_home);
-    wayPoints.addAll(_routeCart);
+    // Sort descending by priority (High: 2, Med: 1, Low: 0)
+    // Low priority ends up at the end of the array (final destination)
+    _routeCart.sort((a, b) => (b['priority'] as int).compareTo(a['priority'] as int));
 
-    var opt = MapBoxOptions.from(_navigationOption);
-    opt.simulateRoute = true;
-    opt.voiceInstructionsEnabled = true;
-    opt.bannerInstructionsEnabled = true;
-    opt.units = VoiceUnits.metric;
-    opt.language = "en";
+    var wayPoints = <WayPoint>[];
+    wayPoints.add(_home); // start from home
+    for (var item in _routeCart) {
+      wayPoints.add(item['waypoint'] as WayPoint);
+    }
     
-    await MapBoxNavigation.instance.startNavigation(wayPoints: wayPoints, options: opt);
+    _isMultipleStop = wayPoints.length > 2;
+    
+    // Use Embedded Navigation Controller
+    _controller?.buildRoute(wayPoints: wayPoints, options: _navigationOption);
+    
+    _autoStartNavigation = true; // Auto-start once built
+    
+    // Minimize panel to let user see the navigation fully
+    if (_panelController.isAttached) {
+      _panelController.close();
+    }
     
     setState(() {
       _routeCart.clear();
@@ -713,6 +761,10 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
         setState(() {
           _routeBuilt = true;
         });
+        if (_autoStartNavigation) {
+          _autoStartNavigation = false;
+          _startEmbeddedNavigation();
+        }
         break;
       case MapBoxEvent.route_build_failed:
         setState(() {
