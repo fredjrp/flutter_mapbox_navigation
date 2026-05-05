@@ -24,42 +24,12 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   String? _platformVersion;
   String? _instruction;
   
-  WayPoint _destination = WayPoint(
-      name: "Way Point 5",
-      latitude: 38.90894949285854,
-      longitude: -77.03651905059814,
-      isSilent: false);
-
-  final _origin = WayPoint(
-      name: "Way Point 1",
-      latitude: 38.9111117447887,
-      longitude: -77.04012393951416,
-      isSilent: true);
-  final _stop1 = WayPoint(
-      name: "Way Point 2",
-      latitude: 38.91113678979344,
-      longitude: -77.03847169876099,
-      isSilent: true);
-  final _stop2 = WayPoint(
-      name: "Way Point 3",
-      latitude: 38.91040213277608,
-      longitude: -77.03848242759705,
-      isSilent: false);
-  final _stop3 = WayPoint(
-      name: "Way Point 4",
-      latitude: 38.909650771013034,
-      longitude: -77.03850388526917,
-      isSilent: true);
-      
-  final _home = WayPoint(
-      name: "Home",
-      latitude: 37.77440680146262,
-      longitude: -122.43539772352648,
-      isSilent: false);
-  final _store = WayPoint(
-      name: "Store",
-      latitude: 37.76556957793795,
-      longitude: -122.42409811526268,
+  WayPoint? _destination;
+  
+  final _mockDeviceLocation = WayPoint(
+      name: "Rongai, Kenya",
+      latitude: -1.396,
+      longitude: 36.762,
       isSilent: false);
 
   bool _isMultipleStop = false;
@@ -89,8 +59,8 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
   @override
   void initState() {
     super.initState();
-    if (_destination.name != null) {
-      _searchController.text = _destination.name!;
+    if (_destination?.name != null) {
+      _searchController.text = _destination!.name!;
     }
     initialize();
   }
@@ -264,7 +234,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                         final addedPointMap = await Navigator.of(context).push<Map<String, dynamic>>(
                           MaterialPageRoute(
                             builder: (_) => LocationProductPage(
-                              location: _destination,
+                              location: _destination!,
                               address: _selectedLocationAddress,
                               imageUrl: _selectedLocationImageUrl,
                             ),
@@ -452,39 +422,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                   const SizedBox(height: 20),
                 ],
 
-                // Full Screen Navigation Buttons
-                const Text(
-                  "Full Screen Navigation",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    FilledButton(
-                      onPressed: _startAtoB,
-                      child: const Text("Start A to B"),
-                    ),
-                    FilledButton(
-                      onPressed: _startMultiStop,
-                      child: const Text("Start Multi Stop"),
-                    ),
-                    FilledButton(
-                      onPressed: _startFreeDrive,
-                      child: const Text("Free Drive"),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                const Divider(),
-                const SizedBox(height: 10),
-
-                // Embedded Navigation Buttons
-                const Text(
-                  "Embedded Navigation",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
+                // Navigation Status
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 10,
@@ -494,7 +432,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                       onPressed: _isNavigating ? null : () => _buildRoute(clearFirst: false),
                       child: Text(_routeBuilt && !_isNavigating
                           ? "Clear Route"
-                          : "Build Route"),
+                          : "Preview Route"),
                     ),
                     FilledButton.tonal(
                       onPressed: _routeBuilt && !_isNavigating
@@ -642,7 +580,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     _routeCart.sort((a, b) => (b['priority'] as int).compareTo(a['priority'] as int));
 
     var wayPoints = <WayPoint>[];
-    wayPoints.add(_home); // start from home
+    wayPoints.add(_mockDeviceLocation); // Dynamic origin instead of hardcoded _home
     for (var item in _routeCart) {
       wayPoints.add(item['waypoint'] as WayPoint);
     }
@@ -665,52 +603,6 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     });
   }
 
-  Future<void> _startAtoB() async {
-    var wayPoints = <WayPoint>[];
-    wayPoints.add(_home);
-    wayPoints.add(_destination);
-    var opt = MapBoxOptions.from(_navigationOption);
-    opt.simulateRoute = true;
-    opt.voiceInstructionsEnabled = true;
-    opt.bannerInstructionsEnabled = true;
-    opt.units = VoiceUnits.metric;
-    opt.language = "de-DE";
-    await MapBoxNavigation.instance
-        .startNavigation(wayPoints: wayPoints, options: opt);
-  }
-
-  Future<void> _startMultiStop() async {
-    _isMultipleStop = true;
-    var wayPoints = <WayPoint>[];
-    wayPoints.add(_origin);
-    wayPoints.add(_stop1);
-    wayPoints.add(_stop2);
-    wayPoints.add(_stop3);
-    wayPoints.add(_destination);
-
-    MapBoxNavigation.instance.startNavigation(
-        wayPoints: wayPoints,
-        options: MapBoxOptions(
-            mode: MapBoxNavigationMode.driving,
-            simulateRoute: true,
-            language: "en",
-            allowsUTurnAtWayPoints: true,
-            units: VoiceUnits.metric));
-    
-    //after 10 seconds add a new stop
-    await Future.delayed(const Duration(seconds: 10));
-    var stop = WayPoint(
-        name: "Gas Station",
-        latitude: 38.911176544398,
-        longitude: -77.04014366543564,
-        isSilent: false);
-    MapBoxNavigation.instance.addWayPoints(wayPoints: [stop]);
-  }
-
-  Future<void> _startFreeDrive() async {
-    await MapBoxNavigation.instance.startFreeDrive();
-  }
-
   void _buildRoute({bool clearFirst = false}) {
     if (clearFirst) {
       _controller?.clearRoute();
@@ -724,11 +616,16 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
       });
     } else {
       var wayPoints = <WayPoint>[];
-      wayPoints.add(_home);
-      wayPoints.add(_destination);
-      _isMultipleStop = wayPoints.length > 2;
-      _controller?.buildRoute(
-          wayPoints: wayPoints, options: _navigationOption);
+      wayPoints.add(_mockDeviceLocation);
+      if (_destination != null) {
+        wayPoints.add(_destination!);
+      }
+      
+      if (wayPoints.length >= 2) {
+        _isMultipleStop = wayPoints.length > 2;
+        _controller?.buildRoute(
+            wayPoints: wayPoints, options: _navigationOption);
+      }
     }
   }
 
