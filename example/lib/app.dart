@@ -458,55 +458,110 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                   const SizedBox(height: 20),
                 ],
 
-                // Navigation Status
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    FilledButton.tonal(
-                      onPressed: _isNavigating ? null : () => _buildRoute(clearFirst: false),
-                      child: Text(_routeBuilt && !_isNavigating
-                          ? "Clear Route"
-                          : "Preview Route"),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: _routeBuilt && !_isNavigating
-                          ? _startEmbeddedNavigation
-                          : null,
-                      child: const Text('Start'),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: _isNavigating ? _cancelEmbeddedNavigation : null,
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: _inFreeDrive ? null : _startEmbeddedFreeDrive,
-                      child: const Text("Free Drive"),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                const Center(
-                  child: Text(
-                    "Tap Map to Set Destination",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (_platformVersion != null)
-                  Center(
-                    child: Text(
-                      'Running on: $_platformVersion',
-                      style: const TextStyle(color: Colors.grey, fontSize: 10),
-                    ),
-                  ),
+                // Recommended Products
+                _buildProductList(),
+                
                 const SizedBox(height: 20),
               ],
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildProductList() {
+    final List<Map<String, String>> products = [
+      {
+        "title": "Havit PB50 27000mAh Power Bank",
+        "description": "140W PD3.1 Ultra Fast Charging Portable Charger with Smart LED Display",
+        "imageUrl": "https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80",
+        "url": "https://www.jumia.co.ke/havit-pb50-27000mah-10000mah-80000mh-power-bank-powerbank-140w-pd3.1-ultra-fast-charging-portable-charger-smart-led-display-with-3-port-output-airline-approved-external-battery-for-macbook-pro-laptops-laptop-iphone-1516-and-samsung-galaxy-327339191"
+      },
+      {
+        "title": "Kuhl K2 20000mAh Power Bank",
+        "description": "High Capacity Portable Charger for Phones & USB Devices",
+        "imageUrl": "https://images.unsplash.com/photo-1620189507195-68309c04c4d0?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80",
+        "url": "https://www.jumia.co.ke/kuhl-kuhl-k2-20000mah-power-bank-high-capacity-portable-charger-for-phones-usb-devices-326556308"
+      },
+      {
+        "title": "Vention 20000mAh Power Bank",
+        "description": "Phone/Laptop Power Bank 100W FKCH0",
+        "imageUrl": "https://images.unsplash.com/photo-1585338107529-13afc5f02586?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80",
+        "url": "https://www.jumia.co.ke/vention-20000mah-phone-laptop-power-bank-100w-fkch0.-325999720"
+      }
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16.0),
+          child: Text(
+            "Recommended Products",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+        ),
+        ...products.map((product) {
+          return Card(
+            elevation: 2,
+            margin: const EdgeInsets.only(bottom: 12),
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: InkWell(
+              onTap: () {
+                // Future: Navigate to product detail or open url
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Tapped ${product['title']}")),
+                );
+              },
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                      child: Image.network(
+                        product['imageUrl']!,
+                        width: 100,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 100,
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.battery_charging_full, color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              product['title']!,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              product['description']!,
+                              style: const TextStyle(color: Colors.black54, fontSize: 12),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ],
     );
   }
